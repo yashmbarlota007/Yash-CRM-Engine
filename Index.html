@@ -1,0 +1,1211 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  
+  <!-- Bootstrap 5 CSS & JS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  
+  <!-- Confetti Library for Milestone Celebration -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  
+  <style>
+    /* ==========================================
+       GLOBAL STYLES
+       ========================================== */
+    body { 
+      background-color: #f1f4f8; 
+      font-family: 'Segoe UI', Tahoma, sans-serif; 
+      padding-bottom: 80px; 
+    }
+    
+    .login-container { 
+      max-width: 400px; 
+      margin-top: 10vh; 
+    }
+    
+    /* ==========================================
+       CARD STYLES (Queue & Follow-ups)
+       ========================================== */
+    .card { 
+      margin-bottom: 20px; 
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08); 
+      border-radius: 12px; 
+      border: none; 
+    }
+    
+    .vip-card { 
+      border-left: 6px solid #ffd700; 
+      background: linear-gradient(to right, #fffdf0, #ffffff); 
+    }
+    
+    .standard-card { 
+      border-left: 6px solid #0d6efd; 
+      background-color: #ffffff; 
+    }
+    
+    .completed-card { 
+      opacity: 0.75; 
+      border-left: 6px solid #198754; 
+      background-color: #f8f9fa; 
+    }
+    
+    /* ==========================================
+       DEALER HEALTH & BADGES
+       ========================================== */
+    .health-hot { color: #198754; font-weight: bold; }
+    .health-warm { color: #ffc107; font-weight: bold; }
+    .health-dormant { color: #dc3545; font-weight: bold; }
+    
+    .due-alert { 
+      background: #ffebee; 
+      color: #c62828; 
+      padding: 6px; 
+      border-radius: 6px; 
+      font-weight: bold; 
+      font-size: 0.85em; 
+      border: 1px solid #ef9a9a; 
+    }
+    
+    .history-badge { 
+      font-size: 0.75em; 
+      margin-right: 5px; 
+    }
+
+    /* ==========================================
+       BUTTONS & INPUTS
+       ========================================== */
+    .action-btn { 
+      height: 50px; 
+      font-weight: 700; 
+      border-radius: 8px; 
+    }
+    
+    .dial-btn { 
+      font-size: 1.2em; 
+      text-decoration: none; 
+      background: #e8f5e9; 
+      color: #2e7d32; 
+      width: 45px; 
+      height: 45px; 
+      display: flex; 
+      align-items: center; 
+      justify-content: center; 
+      border-radius: 50%; 
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1); 
+      cursor: pointer; 
+    }
+
+    .filter-btn { 
+      padding: 4px 8px; 
+      font-size: 0.8em; 
+      border-radius: 15px; 
+      margin-bottom: 5px; 
+    }
+    
+    /* ==========================================
+       UTILITY & LAYOUT
+       ========================================== */
+    .loader { 
+      display: none; 
+      text-align: center; 
+      margin: 40px; 
+    }
+    
+    .dynamic-field { 
+      display: none; 
+      margin-top: 15px; 
+      padding-top: 15px; 
+      border-top: 1px dashed #dee2e6; 
+    }
+    
+    /* Module Switching Classes */
+    .module-section { display: none; }
+    .active-module { display: block; }
+    
+    /* Bottom Navigation Bar */
+    .bottom-nav { 
+      position: fixed; 
+      bottom: 0; 
+      left: 0; 
+      right: 0; 
+      background: #fff; 
+      box-shadow: 0 -2px 10px rgba(0,0,0,0.1); 
+      z-index: 1000; 
+    }
+    
+    .nav-pills .nav-link { 
+      border-radius: 0; 
+      padding: 12px 0; 
+      color: #495057; 
+      font-size: 0.85em; 
+    }
+    
+    .nav-pills .nav-link.active { 
+      background-color: #0d6efd; 
+      color: #fff; 
+    }
+    
+    /* Dashboard Stats Boxes */
+    .stat-card { 
+      background: #fff; 
+      border-radius: 10px; 
+      padding: 15px; 
+      text-align: center; 
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05); 
+      border-bottom: 4px solid #0d6efd; 
+    }
+    
+    .stat-value { 
+      font-size: 1.5em; 
+      font-weight: 900; 
+      color: #212529; 
+    }
+    
+    /* Gamification Animations */
+    .deal-banner { 
+      background: linear-gradient(90deg, #ff8a00, #e52e71); 
+      color: white; 
+      padding: 10px; 
+      border-radius: 8px; 
+      font-weight: bold; 
+      font-size: 0.9em; 
+      text-align: center; 
+      animation: pulse 2s infinite; 
+    }
+    
+    @keyframes pulse { 
+      0% { opacity: 1; } 
+      50% { opacity: 0.8; } 
+      100% { opacity: 1; } 
+    }
+
+    /* ==========================================
+       GAMIFICATION & INCENTIVE UI
+       ========================================== */
+    .brand-incentive-banner { 
+      background: linear-gradient(135deg, #ff8a00, #e52e71); 
+      border-radius: 12px; 
+      padding: 15px; 
+      color: white; 
+      text-align: center; 
+    }
+    
+    .brand-badge { 
+      background: rgba(255,255,255,0.25); 
+      border: 1px solid rgba(255,255,255,0.5); 
+      border-radius: 20px; 
+      padding: 5px 12px; 
+      margin: 4px; 
+      display: inline-block; 
+      font-size: 0.75em; 
+      font-weight: bold; 
+      text-transform: uppercase;
+    }
+    
+    .earn-box-green { 
+      border: 2px solid #28a745; 
+      border-radius: 10px; 
+      padding: 15px; 
+      text-align: center; 
+      background: #fafffa; 
+    }
+    
+    .earn-box-blue { 
+      border: 2px solid #0d6efd; 
+      border-radius: 10px; 
+      padding: 10px; 
+      text-align: center; 
+      background: #f8fbff; 
+    }
+    
+    .earn-box-yellow { 
+      border: 2px solid #ffc107; 
+      border-radius: 10px; 
+      padding: 10px; 
+      text-align: center; 
+      background: #fffcf5; 
+    }
+    
+    .earn-box-dark { 
+      background: #212529; 
+      color: white; 
+      border-radius: 10px; 
+      padding: 12px; 
+      text-align: center; 
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container mt-3">
+    
+    <!-- ============================================== -->
+    <!-- LOGIN MODULE                                   -->
+    <!-- ============================================== -->
+    <div id="loginSection" class="card p-4 mx-auto login-container shadow-lg">
+      <h4 class="text-center text-primary fw-bold mb-1">YASH ENTERPRISE</h4>
+      <h6 class="text-center text-muted mb-4">Operations OS 2.0</h6>
+      
+      <input type="text" id="empId" class="form-control form-control-lg mb-3" placeholder="Employee ID">
+      <input type="password" id="password" class="form-control form-control-lg mb-4" placeholder="Password">
+      
+      <button class="btn btn-primary w-100 action-btn" onclick="initiateLogin(false)">SECURE LOGIN</button>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- LOADER                                         -->
+    <!-- ============================================== -->
+    <div id="loading" class="loader">
+      <div class="spinner-border text-primary" role="status"></div>
+      <p class="mt-3 fw-bold" id="loadingText">Authenticating...</p>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- CEO WATCHTOWER DASHBOARD                       -->
+    <!-- ============================================== -->
+    <div id="ceoDashboard" style="display: none;">
+      
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h5 class="fw-bold m-0 text-dark">🦅 CEO Watchtower</h5>
+        <button class="btn btn-sm btn-outline-danger fw-bold" onclick="logout()">LOGOUT</button>
+      </div>
+
+      <!-- Quick Date Filters -->
+      <div class="card p-3 mb-3 shadow-sm">
+        <div class="d-flex flex-wrap gap-1 mb-2 border-bottom pb-2">
+          <button class="btn btn-outline-dark filter-btn fw-bold" onclick="applyQuickFilter('today')">Today</button>
+          <button class="btn btn-outline-dark filter-btn fw-bold" onclick="applyQuickFilter('yesterday')">Yesterday</button>
+          <button class="btn btn-outline-dark filter-btn fw-bold" onclick="applyQuickFilter('thisWeek')">This Week</button>
+          <button class="btn btn-outline-dark filter-btn fw-bold" onclick="applyQuickFilter('lastWeek')">Last Week</button>
+          <button class="btn btn-outline-dark filter-btn fw-bold" onclick="applyQuickFilter('thisMonth')">This Month</button>
+          <button class="btn btn-outline-dark filter-btn fw-bold" onclick="applyQuickFilter('lastMonth')">Last Month</button>
+        </div>
+        
+        <div class="d-flex gap-2">
+          <input type="date" id="ceoStartDate" class="form-control form-control-sm">
+          <input type="date" id="ceoEndDate" class="form-control form-control-sm">
+          <button class="btn btn-primary btn-sm fw-bold" onclick="fetchCeoData()">Go</button>
+        </div>
+      </div>
+
+      <!-- Idle Time Alerts -->
+      <div id="idleAlertBox" style="display: none;" class="alert alert-danger p-2 fw-bold small"></div>
+
+      <!-- Top KPIs -->
+      <div class="row g-2 mb-3">
+        <div class="col-4">
+          <div class="stat-card">
+            <div class="small fw-bold text-muted">Revenue</div>
+            <div class="stat-value text-success" id="ceoRev">₹0</div>
+          </div>
+        </div>
+        <div class="col-4">
+          <div class="stat-card">
+            <div class="small fw-bold text-muted">Orders</div>
+            <div class="stat-value text-warning" id="ceoOrders">0</div>
+          </div>
+        </div>
+        <div class="col-4">
+          <div class="stat-card">
+            <div class="small fw-bold text-muted">Calls</div>
+            <div class="stat-value text-primary" id="ceoCalls">0</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Leaderboard & Heatmap Section -->
+      <div class="row g-2 mb-3">
+        
+        <!-- Agent Leaderboard -->
+        <div class="col-7">
+          <div class="card p-2 shadow-sm">
+            <h6 class="fw-bold text-primary small mb-1">🏆 Agent Analytics</h6>
+            <ul class="list-group list-group-flush small" id="leaderboardList"></ul>
+          </div>
+        </div>
+        
+        <!-- Area Heatmap -->
+        <div class="col-5">
+          <div class="card p-2 shadow-sm">
+            <h6 class="fw-bold text-danger small mb-1">🔥 Hot Areas</h6>
+            <ul class="list-group list-group-flush small" id="heatmapList"></ul>
+          </div>
+        </div>
+        
+      </div>
+
+      <!-- Live Execution Feed -->
+      <h6 class="fw-bold text-secondary mb-2">Live Execution Feed</h6>
+      <div class="card p-3 shadow-sm" id="ceoFeedList"></div>
+      
+    </div>
+
+
+    <!-- ============================================== -->
+    <!-- CRM AGENT DASHBOARD                            -->
+    <!-- ============================================== -->
+    <div id="dashboardSection" style="display: none;">
+      
+      <!-- Header Row -->
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h6 class="fw-bold m-0 text-secondary" id="welcomeMsg"></h6>
+        <div>
+          <span id="offlineBadge" class="badge bg-warning text-dark me-2" style="display:none;">Offline Mode</span>
+          <button class="btn btn-sm btn-outline-danger fw-bold" onclick="logout()">LOGOUT</button>
+        </div>
+      </div>
+
+      <!-- Gamification Deal Banner -->
+      <div id="dealBanner" class="deal-banner mb-3" style="display:none;"></div>
+
+      <!-- Gamification & Incentive Engine Dashboard -->
+      <div class="card p-2 mb-3 shadow-sm border-0">
+        
+        <!-- Active Brand Incentives -->
+        <div class="brand-incentive-banner mb-3">
+           <div class="small fw-bold mb-2">HOT ACTIVE BRAND INCENTIVES 🔥</div>
+           <div>
+             <span class="brand-badge">PORTRONICS: ₹3/pc</span>
+             <span class="brand-badge">VELOCITY: ₹5/pc</span>
+             <span class="brand-badge">GO BOULT: ₹3/pc</span>
+             <span class="brand-badge">HIKVISION: ₹1/pc</span>
+             <span class="brand-badge">KELOCK: ₹1/pc</span>
+             <span class="brand-badge">BOAT: ₹2/pc</span>
+           </div>
+        </div>
+        
+        <!-- Other Active Schemes -->
+        <div class="d-flex text-center mb-3 border-bottom pb-3">
+           <div class="flex-fill border-end">
+              <h5 class="fw-bold m-0 text-dark">₹2</h5>
+              <small class="text-muted fw-bold">Per Call</small>
+           </div>
+           <div class="flex-fill border-end">
+              <h5 class="fw-bold m-0 text-dark">₹0</h5>
+              <small class="text-muted fw-bold">General / Pc</small>
+           </div>
+           <div class="flex-fill">
+              <h5 class="fw-bold m-0 text-dark">₹0</h5>
+              <small class="text-muted fw-bold">Per ₹1k Sale</small>
+           </div>
+        </div>
+
+        <!-- Target & Progress Bar -->
+        <div class="px-2 mb-3">
+          <div class="d-flex justify-content-between small fw-bold text-muted mb-1">
+             <span>Daily Call Target (Min 50)</span>
+             <span id="f_talk_display">0 / 50</span>
+          </div>
+          <div class="progress" style="height: 10px; border-radius: 10px;">
+             <div id="callProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <!-- Earnings Dashboard -->
+        <div class="earn-box-green mb-2">
+           <div class="small fw-bold text-muted mb-1">EARNED TODAY</div>
+           <h1 class="text-success fw-bold m-0" id="liveCommDisplay">₹0</h1>
+           <div class="small fw-bold text-secondary mt-1">📞 <span id="callsCompletedText">0</span> Calls Completed</div>
+        </div>
+
+        <div class="row g-2 mb-2">
+           <div class="col-6">
+              <div class="earn-box-blue">
+                 <div class="small fw-bold text-muted mb-1">THIS WEEK</div>
+                 <h5 class="m-0 text-primary fw-bold" id="weekCommDisplay">₹--</h5>
+              </div>
+           </div>
+           <div class="col-6">
+              <div class="earn-box-yellow">
+                 <div class="small fw-bold text-muted mb-1">YESTERDAY</div>
+                 <h5 class="m-0 text-warning fw-bold" id="yestCommDisplay">₹--</h5>
+              </div>
+           </div>
+        </div>
+
+        <div class="row g-2 mb-3">
+           <div class="col-6">
+              <div class="earn-box-dark">
+                 <div class="small text-white-50 mb-1">EARNED THIS MONTH</div>
+                 <h5 class="m-0 fw-bold">₹--</h5>
+              </div>
+           </div>
+           <div class="col-6">
+              <div class="earn-box-dark">
+                 <div class="small text-white-50 mb-1">LAST MONTH</div>
+                 <h5 class="m-0 fw-bold">₹--</h5>
+              </div>
+           </div>
+        </div>
+
+        <!-- Original tracking inputs hidden but preserved for internal logic bridging -->
+        <div style="display:none;">
+          <span id="f_assign">0</span>
+          <span id="f_talk">0</span>
+          <span id="f_order">0</span>
+          <span id="liveComm">0</span>
+        </div>
+
+      </div>
+
+      <!-- EOD Report Trigger Button -->
+      <button class="btn btn-dark w-100 py-3 mb-4 fw-bold shadow-lg" style="font-size: 1.1em; border-radius: 10px;" onclick="generateEODReport()">
+        📤 SEND EOD REPORT TO WHATSAPP
+      </button>
+
+      <!-- Offline Actions Pending Alert -->
+      <div id="offlineActionsPending" class="alert alert-info small fw-bold" style="display:none;">
+        Syncing offline data... <span class="spinner-border spinner-border-sm"></span>
+      </div>
+
+      <!-- MODULE 1: Live Call Queue -->
+      <div id="beatModule" class="module-section active-module">
+        <div class="d-flex justify-content-between mb-2">
+          <h5 class="fw-bold text-dark">Live Queue</h5>
+        </div>
+        <div id="dealerList"></div>
+      </div>
+
+      <!-- MODULE 2: Today's Follow-ups -->
+      <div id="followupModule" class="module-section">
+        <h5 class="fw-bold text-dark mb-3">Today's Reminders</h5>
+        <div id="followupList"></div>
+      </div>
+
+      <!-- MODULE 3: Intelligence Scripts & Lead Capture -->
+      <div id="campaignModule" class="module-section card p-3 shadow-sm">
+        
+        <h5 class="text-primary fw-bold mb-3">Capture Market Intelligence</h5>
+        <input type="text" id="enqName" class="form-control mb-2" placeholder="Store Name">
+        <input type="tel" id="enqPhone" class="form-control mb-2" placeholder="Phone Number">
+        <textarea id="enqDetails" class="form-control mb-2" placeholder="Requirements"></textarea>
+        <button class="btn btn-primary w-100 action-btn mb-4">INJECT LEAD</button>
+        
+        <h5 class="text-primary fw-bold mb-2">Live Scripts</h5>
+        <div class="accordion" id="scriptsAccordion"></div>
+        
+      </div>
+      
+    </div>
+  </div>
+
+  <!-- ============================================== -->
+  <!-- BOTTOM NAVIGATION TABS                         -->
+  <!-- ============================================== -->
+  <div class="bottom-nav d-flex" id="bottomNav" style="display: none !important;">
+    <ul class="nav nav-pills w-100 text-center" id="moduleTabs">
+      <li class="nav-item flex-fill">
+        <a class="nav-link active fw-bold" onclick="switchModule('beatModule', this)">📞 Queue</a>
+      </li>
+      <li class="nav-item flex-fill">
+        <a class="nav-link fw-bold" onclick="switchModule('followupModule', this)">📅 Follow-ups</a>
+      </li>
+      <li class="nav-item flex-fill">
+        <a class="nav-link fw-bold" onclick="switchModule('campaignModule', this)">🚀 Tools</a>
+      </li>
+    </ul>
+  </div>
+
+
+  <!-- ============================================== -->
+  <!-- JAVASCRIPT LOGIC (Fully Expanded & Safe)       -->
+  <!-- ============================================== -->
+  <script>
+    
+    // Global Variables (Using var for maximum tablet compatibility)
+    var currentStaffName = "";
+    var currentHourly = 0;
+    var currentUserRole = "";
+    
+    // Object to track when a call/action started for each row
+    var callTimers = {}; 
+
+    // --------------------------------------------------
+    // APPLICATION INITIALIZATION
+    // --------------------------------------------------
+    window.onload = function() {
+      
+      // Offline Event Listeners
+      window.addEventListener('offline', function() { 
+        document.getElementById("offlineBadge").style.display = "inline-block"; 
+      });
+      
+      window.addEventListener('online', function() {
+        syncOfflineData();
+      });
+      
+      // Check Local Storage for Auto Login
+      var savedEmpId = localStorage.getItem("yashCrmEmpId");
+      if (savedEmpId) {
+        document.getElementById("empId").value = savedEmpId;
+        document.getElementById("password").value = localStorage.getItem("yashCrmPassword");
+        
+        initiateLogin(true); // Proceed to login automatically
+      }
+      
+      // ==========================================
+      // AUTO-LOGIN (SSO) RECEIVER ENGINE (PATCHED)
+      // ==========================================
+      const urlParams = new URLSearchParams(window.location.search);
+      const ssoId = urlParams.get('empId');
+      const ssoPass = urlParams.get('pass');
+
+      if (ssoId && ssoPass) {
+        if (document.getElementById('empId')) document.getElementById('empId').value = ssoId;
+        if (document.getElementById('password')) document.getElementById('password').value = ssoPass;
+
+        if (typeof initiateLogin === 'function') initiateLogin(true);
+      } 
+      else {
+        const cachedId = localStorage.getItem('yashCrmEmpId');
+        const cachedPass = localStorage.getItem('yashCrmPassword');
+        
+        if (cachedId && cachedPass) {
+          if (document.getElementById('empId')) document.getElementById('empId').value = cachedId;
+          if (document.getElementById('password')) document.getElementById('password').value = cachedPass;
+          
+          if (typeof initiateLogin === 'function') initiateLogin(true);
+        }
+      }
+    };
+
+    // --------------------------------------------------
+    // LOGIN LOGIC
+    // --------------------------------------------------
+    function initiateLogin(isAutoLogin) {
+      var empId = document.getElementById("empId").value.trim();
+      var pass = document.getElementById("password").value.trim();
+      
+      document.getElementById("loginSection").style.display = "none";
+      document.getElementById("loading").style.display = "block";
+      
+      google.script.run.withSuccessHandler(handleAuth).verifyLogin(empId, pass);
+    }
+
+    function handleAuth(res) {
+      
+      if (!res.success) { 
+        alert(res.msg); 
+        logout(); 
+        return; 
+      }
+      
+      // Save valid credentials locally
+      localStorage.setItem("yashCrmEmpId", document.getElementById("empId").value.trim());
+      localStorage.setItem("yashCrmPassword", document.getElementById("password").value.trim());
+      
+      // Set globals
+      currentStaffName = res.name; 
+      currentHourly = res.hourlySalary; 
+      currentUserRole = res.role.toString().toUpperCase();
+      
+      // Route user depending on role
+      if (currentUserRole === "OWNER") {
+        
+        // Auto load today's data for CEO Watchtower
+        applyQuickFilter('today'); 
+        
+      } else {
+         
+         document.getElementById("welcomeMsg").innerText = "Agent: " + currentStaffName;
+         document.getElementById("bottomNav").style.setProperty('display', 'flex', 'important');
+         fetchDataFromEngine();
+         
+      }
+    }
+    
+    function logout() {
+      localStorage.clear();
+      location.reload();
+    }
+
+
+    // --------------------------------------------------
+    // CEO QUICK FILTERS & WATCHTOWER LOGIC
+    // --------------------------------------------------
+    function applyQuickFilter(type) {
+      
+      var today = new Date();
+      var start = new Date(today);
+      var end = new Date(today);
+
+      if (type === 'yesterday') {
+        start.setDate(today.getDate() - 1);
+        end.setDate(today.getDate() - 1);
+      } 
+      else if (type === 'thisWeek') {
+        var day = today.getDay() || 7;
+        start.setDate(today.getDate() - day + 1);
+      } 
+      else if (type === 'lastWeek') {
+        var day = today.getDay() || 7;
+        end.setDate(today.getDate() - day);
+        start.setDate(today.getDate() - day - 6);
+      } 
+      else if (type === 'thisMonth') {
+        start = new Date(today.getFullYear(), today.getMonth(), 1);
+      } 
+      else if (type === 'lastMonth') {
+        start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        end = new Date(today.getFullYear(), today.getMonth(), 0);
+      }
+
+      // Convert to YYYY-MM-DD format manually for input date fields
+      var startStr = start.getFullYear() + "-" + String(start.getMonth() + 1).padStart(2, '0') + "-" + String(start.getDate()).padStart(2, '0');
+      var endStr = end.getFullYear() + "-" + String(end.getMonth() + 1).padStart(2, '0') + "-" + String(end.getDate()).padStart(2, '0');
+      
+      // Assign to UI
+      document.getElementById('ceoStartDate').value = startStr;
+      document.getElementById('ceoEndDate').value = endStr;
+      
+      // Trigger fetch
+      fetchCeoData();
+    }
+
+    function fetchCeoData() {
+      document.getElementById("loading").style.display = "block";
+      document.getElementById("ceoDashboard").style.display = "none";
+      
+      var start = document.getElementById("ceoStartDate").value;
+      var end = document.getElementById("ceoEndDate").value;
+      
+      google.script.run.withSuccessHandler(renderCeoDashboard).getCeoData(start, end);
+    }
+
+    function renderCeoDashboard(data) {
+      
+      document.getElementById("loading").style.display = "none";
+      document.getElementById("ceoDashboard").style.display = "block";
+      
+      // Set KPIs
+      document.getElementById("ceoRev").innerText = "₹" + data.revenue.toLocaleString('en-IN');
+      document.getElementById("ceoCalls").innerText = data.calls;
+      document.getElementById("ceoOrders").innerText = data.orders;
+      
+      // Display Idle Alerts if any
+      var alertBox = document.getElementById("idleAlertBox");
+      if (data.idleAlerts.length > 0) {
+        alertBox.style.display = "block";
+        alertBox.innerText = "🚨 Idle: " + data.idleAlerts.join(" | ");
+      } else { 
+        alertBox.style.display = "none"; 
+      }
+      
+      // Render Agent Leaderboard
+      var lList = document.getElementById("leaderboardList");
+      lList.innerHTML = data.leaderboard.map(function(a) { 
+        var htm = '<li class="list-group-item p-2 border-bottom">';
+        htm += '<div class="d-flex justify-content-between fw-bold">';
+        htm += '<span>' + a.name + '</span>';
+        htm += '<span class="text-success">₹' + a.rev.toLocaleString() + '</span>';
+        htm += '</div>';
+        htm += '<div class="d-flex justify-content-between small text-muted mt-1">';
+        htm += '<span>Calls: ' + a.calls + '</span>';
+        htm += '<span>Avg Time: ' + a.avgTime + '</span>';
+        htm += '</div>';
+        htm += '</li>';
+        return htm;
+      }).join('');
+      
+      // Render Heatmap
+      var hList = document.getElementById("heatmapList");
+      hList.innerHTML = data.heatmap.map(function(a) { 
+        var htm = '<li class="list-group-item d-flex justify-content-between p-1">';
+        htm += '<span>' + a.area + '</span>';
+        htm += '<strong>₹' + a.rev.toLocaleString() + '</strong>';
+        htm += '</li>';
+        return htm;
+      }).join('');
+
+      // Render Feed (WITH AUDIO PLAY BUTTON & QA RATING FIXED)
+      var feedList = document.getElementById("ceoFeedList");
+      feedList.innerHTML = data.feed.map(function(f) { 
+        
+        var htm = '<div class="border-start border-3 border-primary ps-3 mb-3">';
+        
+        htm += '<div class="d-flex justify-content-between">';
+        htm += '<span class="fw-bold">' + f.dealer + '</span>';
+        htm += '<span class="text-muted small">' + f.time + '</span>';
+        htm += '</div>';
+        
+        htm += '<div class="small">By: ' + f.crm + ' | Status: <span class="text-primary fw-bold">' + f.status + '</span></div>';
+        
+        if (f.amt > 0) {
+          htm += '<div class="text-success fw-bold">Value: ₹' + f.amt + '</div>';
+        }
+        
+        // --- AUDIO LINK & QA RATING BLOCK ---
+        if (f.audio && f.audio !== "") {
+          htm += '<div class="mt-2 p-2 bg-light rounded border">';
+          htm += '<a href="' + f.audio + '" target="_blank" class="btn btn-sm btn-dark mb-2">🎙️ Play Call</a>';
+          htm += '<div class="d-flex gap-2">';
+          htm += '<select id="qaStar_' + f.rowId + '" class="form-select form-select-sm" style="width:70px">';
+          htm += '<option value="⭐">⭐</option><option value="⭐⭐">⭐⭐</option><option value="⭐⭐⭐">⭐⭐⭐</option><option value="⭐⭐⭐⭐">⭐⭐⭐⭐</option><option value="⭐⭐⭐⭐⭐">⭐⭐⭐⭐⭐</option>';
+          htm += '</select>';
+          htm += '<input type="text" id="qaFeed_' + f.rowId + '" class="form-control form-control-sm" placeholder="Feedback">';
+          htm += '<button class="btn btn-sm btn-success fw-bold" onclick="saveQA(' + f.rowId + ', this)">Save</button>';
+          htm += '</div></div>';
+        }
+        
+        htm += '</div>';
+        return htm;
+        
+      }).join('');
+    }
+
+    // QA Save function
+    function saveQA(rowId, btnElement) {
+      var star = document.getElementById("qaStar_" + rowId).value;
+      var feed = document.getElementById("qaFeed_" + rowId).value;
+      
+      btnElement.innerText = "Saving...";
+      btnElement.disabled = true;
+      
+      google.script.run.withSuccessHandler(function(msg) {
+        btnElement.innerText = "Saved";
+        btnElement.classList.replace("btn-success", "btn-secondary");
+      }).submitQaRating(rowId, star, feed);
+    }
+
+
+    // --------------------------------------------------
+    // CRM OPERATIONS (AGENTS VIEW)
+    // --------------------------------------------------
+    function fetchDataFromEngine() {
+      document.getElementById("loading").style.display = "block";
+      document.getElementById("dashboardSection").style.display = "none";
+      
+      google.script.run.withSuccessHandler(renderEngine).getBeatPlan(currentStaffName);
+    }
+
+    function renderEngine(data) {
+      document.getElementById("loading").style.display = "none";
+      document.getElementById("dashboardSection").style.display = "block";
+      
+      // Store globally for EOD Report Generator to access
+      window.currentEngineData = data;
+      
+      // Update Original Hidden Elements (Preserving older functionality binding)
+      if (document.getElementById("f_assign")) document.getElementById("f_assign").innerText = data.funnel.assigned;
+      if (document.getElementById("f_talk")) document.getElementById("f_talk").innerText = data.funnel.talked;
+      if (document.getElementById("f_order")) document.getElementById("f_order").innerText = data.funnel.orders;
+      if (document.getElementById("liveComm")) document.getElementById("liveComm").innerText = "₹" + data.commission.toFixed(0);
+      
+      // Update New Gamification Earning UI Elements
+      if (document.getElementById("liveCommDisplay")) document.getElementById("liveCommDisplay").innerText = "₹" + data.commission.toFixed(0);
+      if (document.getElementById("callsCompletedText")) document.getElementById("callsCompletedText").innerText = data.funnel.talked;
+      if (document.getElementById("f_talk_display")) document.getElementById("f_talk_display").innerText = data.funnel.talked + " / 50";
+      
+      // Calculate Gamified Progress Bar Width
+      var callTarget = 50;
+      var callProgress = (data.funnel.talked / callTarget) * 100;
+      if (callProgress > 100) callProgress = 100;
+      if (document.getElementById("callProgressBar")) document.getElementById("callProgressBar").style.width = callProgress + "%";
+      
+      // Gamification: Big Deal Notification
+      if (data.biggestDeal && data.biggestDeal.amount > 0) {
+        document.getElementById("dealBanner").style.display = "block";
+        document.getElementById("dealBanner").innerText = "🔥 DEAL OF THE DAY: " + data.biggestDeal.agent + " Closed ₹" + data.biggestDeal.amount.toLocaleString() + "! 🔥";
+      }
+      
+      // Render Dealers
+      document.getElementById("dealerList").innerHTML = buildCards(data.dealers);
+      document.getElementById("followupList").innerHTML = buildCards(data.followups);
+      
+      // Render Scripts
+      document.getElementById("scriptsAccordion").innerHTML = data.scripts.map(function(s, i) { 
+        
+        var sh = '<div class="accordion-item mb-2 border rounded">';
+        
+        sh += '<h2 class="accordion-header">';
+        sh += '<button class="accordion-button collapsed fw-bold text-' + s.color + ' bg-light" type="button" data-bs-toggle="collapse" data-bs-target="#scr' + i + '">' + s.campaign + '</button>';
+        sh += '</h2>';
+        
+        sh += '<div id="scr' + i + '" class="accordion-collapse collapse">';
+        sh += '<div class="accordion-body bg-white small">';
+        sh += '<strong>Goal:</strong> ' + s.goal + '<br><br>' + s.text;
+        sh += '</div></div></div>';
+        
+        return sh;
+        
+      }).join('');
+    }
+
+    // Call Timer Starter
+    function markCallStart(rowId) {
+      if (!callTimers[rowId]) {
+        callTimers[rowId] = Date.now();
+      }
+    }
+
+    // Agent Card Builder
+    function buildCards(dealers) {
+      
+      if (dealers.length === 0) {
+        return "<p class='alert alert-light text-center fw-bold'>No pending assignments.</p>";
+      }
+      
+      return dealers.map(function(d) {
+        
+        var isCompleted = d.status && d.status.trim() !== ""; 
+        
+        var duesBox = "";
+        if (d.outWithBill > 0 || d.outWithoutBill > 0) {
+          duesBox = '<div class="due-alert mb-2">⚠️ OUTSTANDING DUE: With Bill ₹' + d.outWithBill + ' | W/O Bill ₹' + d.outWithoutBill + '</div>';
+        }
+        
+        var historyHtml = d.history.map(function(h) { 
+          return '<span class="badge bg-secondary history-badge">' + h.date.slice(0,5) + ': ' + h.status + '</span>'; 
+        }).join('');
+        
+        var healthClass = "health-dormant";
+        if (d.health.indexOf("Hot") !== -1) { healthClass = "health-hot"; }
+        if (d.health.indexOf("Warm") !== -1) { healthClass = "health-warm"; }
+
+        // Container Div
+        var html = '<div class="card p-3 ' + (isCompleted ? 'completed-card' : 'standard-card') + ' shadow-sm" id="card_' + d.rowNumber + '">';
+        
+        if (isCompleted) {
+          html += '<span class="badge bg-success mb-2 w-100 py-2">✅ DONE: ' + d.status + '</span>';
+        }
+        
+        // Header Section
+        html += '<div class="d-flex justify-content-between align-items-start mb-2">';
+        
+        html += '<div>';
+        html += '<h5 class="mb-1 fw-bold text-dark">' + d.dealerName + '</h5>';
+        html += '<span class="' + healthClass + ' small">' + d.health + '</span> | <span class="text-muted small">' + d.area + '</span>';
+        html += '</div>';
+        
+        // Dial Button (Starts Timer on click)
+        html += '<div class="d-flex gap-2">';
+        html += '<a href="tel:' + d.phone + '" onclick="markCallStart(' + d.rowNumber + ')" class="dial-btn border-0">📞</a>';
+        html += '</div>';
+        
+        html += '</div>'; // End Header
+        
+        html += duesBox;
+        
+        if (historyHtml) {
+          html += '<div class="mb-2">' + historyHtml + '</div>';
+        }
+        
+        // Hidden Inputs
+        html += '<input type="hidden" id="activeStatus_' + d.rowNumber + '" value="">';
+        html += '<input type="hidden" id="dealerName_' + d.rowNumber + '" value="' + d.dealerName + '">';
+        html += '<input type="hidden" id="dealerPhone_' + d.rowNumber + '" value="' + d.phone + '">';
+        
+        // Action Buttons
+        html += '<div class="d-flex gap-2 mt-2 flex-wrap">';
+        
+        html += '<button class="btn btn-outline-success flex-fill fw-bold" style="min-width:45%;" onclick="selectAction(\'Order Received\', ' + d.rowNumber + ', this)">✅ Order</button>';
+        
+        html += '<button class="btn btn-outline-info flex-fill fw-bold" style="min-width:45%;" onclick="selectAction(\'Talked / No Order\', ' + d.rowNumber + ', this)">💬 Talked</button>';
+        
+        html += '<button class="btn btn-outline-warning text-dark flex-fill fw-bold" style="min-width:45%;" onclick="selectAction(\'Follow-up Required\', ' + d.rowNumber + ', this)">📅 Next</button>';
+        
+        html += '<button class="btn btn-outline-danger flex-fill fw-bold" style="min-width:45%;" onclick="selectAction(\'Call Busy/No Answer\', ' + d.rowNumber + ', this)">❌ Busy</button>';
+        
+        html += '</div>'; // End Action Buttons
+        
+        // Dynamic Fields Container
+        html += '<div id="dynamicContainer_' + d.rowNumber + '" class="dynamic-field">';
+        
+        // 1. Order Div
+        html += '<div id="orderValueDiv_' + d.rowNumber + '" style="display:none;">';
+        html += '<input type="text" class="form-control mb-2 border-success" id="orderItems_' + d.rowNumber + '" placeholder="Items Ordered">';
+        html += '<input type="number" class="form-control mb-2 border-success" id="orderAmt_' + d.rowNumber + '" placeholder="Total Invoice Amount (₹)">';
+        html += '<select class="form-select mb-3 border-success" id="payMode_' + d.rowNumber + '">';
+        html += '<option value="DAILY">DAILY</option>';
+        html += '<option value="COD">COD</option>';
+        html += '</select>';
+        html += '</div>';
+        
+        // 2. Lost Reason Div
+        html += '<div id="lostReasonDiv_' + d.rowNumber + '" style="display:none;">';
+        html += '<select class="form-select mb-3 border-info" id="lostReason_' + d.rowNumber + '">';
+        html += '<option value="">Select Reason...</option>';
+        html += '<option value="Price High">Price Too High</option>';
+        html += '<option value="Overstocked">Already Stocked</option>';
+        html += '<option value="Competitor">Buying from Competitor</option>';
+        html += '<option value="Not Interested">Not Interested</option>';
+        html += '</select>';
+        html += '</div>';
+
+        // 3. Follow Up Div
+        html += '<div id="followUpDiv_' + d.rowNumber + '" style="display:none;">';
+        html += '<label class="small text-warning fw-bold">Next Follow-up Date</label>';
+        html += '<input type="date" class="form-control mb-3 border-warning" id="followUpDate_' + d.rowNumber + '">';
+        html += '</div>';
+        
+        // Universal Upload and Lock Button
+        html += '<input type="file" class="form-control mb-3 bg-light" id="file_' + d.rowNumber + '" accept="audio/*">';
+        html += '<button class="btn btn-dark w-100 action-btn" onclick="submitUpdate(' + d.rowNumber + ', this)">LOCK EXECUTION</button>';
+        
+        html += '</div>'; // End Dynamic Fields
+        html += '</div>'; // End Card Container
+        
+        return html;
+        
+      }).join('');
+    }
+
+    // Handle Action Button Selection
+    function selectAction(status, rowId, btnElement) {
+      
+      // If agent directly clicks an action without clicking dial, start timer now
+      markCallStart(rowId); 
+      
+      document.getElementById("activeStatus_" + rowId).value = status;
+      document.getElementById("dynamicContainer_" + rowId).style.display = "block";
+      
+      // Hide all specific divs first
+      document.getElementById("orderValueDiv_" + rowId).style.display = "none";
+      document.getElementById("followUpDiv_" + rowId).style.display = "none";
+      document.getElementById("lostReasonDiv_" + rowId).style.display = "none";
+      
+      // Show appropriate div
+      if (status === "Order Received") {
+        document.getElementById("orderValueDiv_" + rowId).style.display = "block";
+      } else if (status === "Follow-up Required") {
+        document.getElementById("followUpDiv_" + rowId).style.display = "block";
+      } else if (status === "Talked / No Order") {
+        document.getElementById("lostReasonDiv_" + rowId).style.display = "block";
+      }
+      
+      // Visual styling for selected button
+      var siblingBtns = btnElement.parentElement.children;
+      for (var i = 0; i < siblingBtns.length; i++) { 
+        siblingBtns[i].classList.remove('active', 'text-white'); 
+      }
+      btnElement.classList.add('active', 'text-white');
+    }
+
+
+    // --------------------------------------------------
+    // SUBMISSION & OFFLINE LOGIC
+    // --------------------------------------------------
+    function submitUpdate(rowNumber, btnTarget) {
+      
+      var status = document.getElementById("activeStatus_" + rowNumber).value;
+      
+      if (!status) {
+        return alert("Select an action first.");
+      }
+      
+      var fileInput = document.getElementById("file_" + rowNumber);
+      
+      // Safely grab elements
+      var amtEl = document.getElementById("orderAmt_" + rowNumber);
+      var orderAmt = amtEl ? amtEl.value : "";
+      
+      var itemsEl = document.getElementById("orderItems_" + rowNumber);
+      var orderItems = itemsEl ? itemsEl.value : "";
+      
+      var payModeEl = document.getElementById("payMode_" + rowNumber);
+      var payMode = payModeEl ? payModeEl.value : "DAILY";
+      
+      var dateEl = document.getElementById("followUpDate_" + rowNumber);
+      var followUpDate = dateEl ? dateEl.value : "";
+      
+      var reasonEl = document.getElementById("lostReason_" + rowNumber);
+      var lostReason = reasonEl ? reasonEl.value : "";
+      
+      var dealerName = document.getElementById("dealerName_" + rowNumber).value;
+      var phone = document.getElementById("dealerPhone_" + rowNumber).value;
+      
+      // Validations
+      if (status === "Order Received" && !orderAmt) {
+        return alert("Order amount is mandatory.");
+      }
+      if (status === "Talked / No Order" && !lostReason) {
+        return alert("Select a lost reason.");
+      }
+      
+      // -------------------------------------------------
+      // Calculate Call Duration based on timer
+      // -------------------------------------------------
+      var durationSecs = 0;
+      if (callTimers[rowNumber]) {
+        // Current Time minus Start Time divided by 1000 = seconds
+        durationSecs = Math.floor((Date.now() - callTimers[rowNumber]) / 1000);
+      }
+      
+      // UI State Updates
+      btnTarget.innerText = "LOCKING..."; 
+      btnTarget.disabled = true;
+
+      // Confetti gamification trigger
+      if (status === "Order Received" && parseFloat(orderAmt) >= 50000) {
+        if(typeof confetti !== 'undefined') {
+          confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+        }
+      }
+
+      // Build Data Payload
+      var payload = { 
+        row: rowNumber, 
+        status: status, 
+        amt: orderAmt, 
+        items: orderItems, 
+        mode: payMode, 
+        date: followUpDate, 
+        hourly: currentHourly, 
+        staff: currentStaffName, 
+        dealer: dealerName, 
+        phone: phone, 
+        reason: lostReason, 
+        duration: durationSecs 
+      };
+
+      // OFFLINE MODE: Save to Local Storage if Internet is down
+      if (!navigator.onLine) {
+        var offlineQueue = JSON.parse(localStorage.getItem("offlineQueue") || "[]");
+        
+        offlineQueue.push(payload);
+        localStorage.setItem("offlineQueue", JSON.stringify(offlineQueue));
+        
+        document.getElementById("card_" + rowNumber).style.display = "none";
+        alert("Saved Offline. Will sync when internet is back.");
+        return;
+      }
+
+      // ONLINE MODE: Function to hit Apps Script backend
+      var doSubmit = function(audioData, fileName) {
+        
+        google.script.run.withSuccessHandler(function(res) {
+          document.getElementById("card_" + rowNumber).classList.add('completed-card');
+          btnTarget.innerText = "LOCKED";
+          
+          // Clear timer after successful submission to avoid memory bloat
+          delete callTimers[rowNumber]; 
+          
+        }).updateCallData(
+          payload.row, payload.status, audioData, fileName, 
+          payload.amt, payload.items, payload.mode, payload.date, 
+          payload.hourly, payload.staff, payload.dealer, 
+          payload.phone, payload.reason, payload.duration
+        );
+        
+      };
+
+      // Read Audio Data if file provided, else submit immediately
+      if (fileInput && fileInput.files && fileInput.files[0]) {
+        var reader = new FileReader();
+        reader.onloadend = function(e) { 
+          doSubmit(e.target.result, fileInput.files[0].name); 
+        };
+        reader.readAsDataURL(fileInput.files[0]);
+      } else { 
+        doSubmit(null, null); 
+      }
+    }
+
+
+    // Sync Offline Data Sequentially when internet returns
+    function syncOfflineData() {
+      
+      document.getElementById("offlineBadge").style.display = "none";
+      
+      var offlineQueue = JSON.parse(localStorage.getItem("offlineQueue") || "[]");
+      
+      if (offlineQueue.length === 0) {
+        return;
+      }
+      
+      document.getElementById("offlineActionsPending").style.display = "block";
+      
+      var item = offlineQueue.shift();
+      
+      google.script.run.withSuccessHandler(function() {
+        
+        localStorage.setItem("offlineQueue", JSON.stringify(offlineQueue));
+        
+        if (offlineQueue.length > 0) {
+          syncOfflineData(); // Process next item recursively
+        } else {
+          document.getElementById("offlineActionsPending").style.display = "none";
+          fetchDataFromEngine(); // Reload UI to show latest data
+        }
+        
+      }).updateCallData(
+        item.row, item.status, null, null, 
+        item.amt, item.items, item.mode, item.date, 
+        item.hourly, item.staff, item.dealer, 
+        item.phone, item.reason, item.duration
+      );
+    }
+
+    // Switch between bottom navigation tabs
+    function switchModule(moduleId, element) {
+      
+      document.querySelectorAll('.module-section').forEach(function(el) { 
+        el.classList.remove('active-module'); 
+      });
+      
+      document.getElementById(moduleId).classList.add('active-module');
+      
+      document.querySelectorAll('.nav-link').forEach(function(el) { 
+        el.classList.remove('active'); 
+      });
+      
+      element.classList.add('active');
+    }
+
+    // --------------------------------------------------
+    // EOD REPORT GENERATOR LOGIC
+    // --------------------------------------------------
+    function generateEODReport() {
+      var d = window.currentEngineData;
+      if (!d) return alert("System still loading. Please try again in a moment.");
+      
+      var agent = currentStaffName || "Agent";
+      var assigned = d.funnel.assigned || 0;
+      var talked = d.funnel.talked || 0;
+      var orders = d.funnel.orders || 0;
+      var comm = d.commission || 0;
+      var bigDealName = d.biggestDeal && d.biggestDeal.agent !== "" ? d.biggestDeal.agent : "N/A";
+      var bigDealAmt = d.biggestDeal && d.biggestDeal.amount > 0 ? d.biggestDeal.amount : 0;
+      
+      // Calculate Conversion Rate
+      var conversion = talked > 0 ? ((orders / talked) * 100).toFixed(1) : 0;
+      
+      // Construct Template
+      var template = 
+        "📈 *YASH MARKETING - EOD REPORT*\n" +
+        "👤 *Agent:* " + agent + "\n" +
+        "📅 *Date:* " + new Date().toLocaleDateString('en-IN') + "\n\n" +
+        
+        "🔥 *A. The Revenue Engine*\n" +
+        "• Assigned Queue: " + assigned + "\n" +
+        "• Dials Attempted: " + talked + "\n" +
+        "• Successful Connections: " + talked + "\n" +
+        "• Orders Received: " + orders + "\n" +
+        "• Total GMV Generated: [Requires Backend Sum]\n" +
+        "• Biggest Deal: " + bigDealName + " (₹" + bigDealAmt + ")\n" +
+        "• Conversion Rate: " + conversion + "%\n\n" +
+        
+        "⏱️ *C. Execution & Efficiency*\n" +
+        "• First Call Time: [Auto-Tracked via System]\n" +
+        "• Last Call Time: [Auto-Tracked via System]\n" +
+        "• Total Talk Time: [Pulled from Call Logs]\n" +
+        "• Avg Call Duration: [Pulled from Call Logs]\n" +
+        "• Max Idle Gap: [Auto-Tracked via Watchtower]\n\n" +
+        
+        "📊 *D. Market Intelligence*\n" +
+        "• Lost Deals (Talked/No Order): " + (talked - orders) + "\n" +
+        "• Primary Lost Reason: [Most Logged Reason]\n" +
+        "• Sprint Target vs Actual: [Pending Integration]\n" +
+        "• Most Sold Category: [Pending Integration]\n" +
+        "• Daily Commission Earned: ₹" + comm.toFixed(0);
+
+      // Encode for WhatsApp URI
+      var encodedUrl = "https://wa.me/?text=" + encodeURIComponent(template);
+      window.open(encodedUrl, '_blank');
+    }
+
+  </script>
+</body>
+</html>
