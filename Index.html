@@ -5,7 +5,410 @@
   
   <!-- Bootstrap 5 CSS & JS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js">
+    // ==================================================
+    // SALES ENQUIRY PIPELINE JAVASCRIPT ENGINE
+    // ==================================================
+    var allEnquiriesData = [];
+    var currentEnquiryFilter = "ALL";
+    var dealersListCache = [];
+
+    // Load Sales Enquiries from Backend
+    function loadSalesEnquiries() {
+      var container = document.getElementById("enquiryListContainer");
+      if (container) {
+        container.innerHTML = '<div class="text-center p-4 text-muted"><div class="spinner-border text-primary spinner-border-sm" role="status"></div><span class="ms-2">Loading Sales Enquiries...</span></div>';
+      }
+
+      google.script.run
+        .withSuccessHandler(function(res) {
+          if (!res || !res.success) {
+            if (container) container.innerHTML = '<div class="alert alert-warning">Could not load enquiries: ' + (res ? res.error : "Unknown error") + '</div>';
+            return;
+          }
+          allEnquiriesData = res.enquiries || [];
+          renderEnquiryCounts(res.counts || {});
+          renderEnquiryCards(allEnquiriesData);
+        })
+        .withFailureHandler(function(err) {
+          if (container) container.innerHTML = '<div class="alert alert-danger">Error fetching enquiries: ' + err.toString() + '</div>';
+        })
+        .getSalesEnquiries(currentStaffName, currentUserRole);
+    }
+
+    // Render KPI Counts
+    function renderEnquiryCounts(counts) {
+      if (document.getElementById("kpi_enq_total")) document.getElementById("kpi_enq_total").innerText = counts.total || 0;
+      if (document.getElementById("kpi_enq_received")) document.getElementById("kpi_enq_received").innerText = counts.received || 0;
+      if (document.getElementById("kpi_enq_discussion")) document.getElementById("kpi_enq_discussion").innerText = counts.discussion || 0;
+      if (document.getElementById("kpi_enq_followup")) document.getElementById("kpi_enq_followup").innerText = counts.followup || 0;
+      if (document.getElementById("kpi_enq_converted")) document.getElementById("kpi_enq_converted").innerText = counts.converted || 0;
+      if (document.getElementById("kpi_enq_closed")) document.getElementById("kpi_enq_closed").innerText = counts.closed || 0;
+
+      // Update Nav Badge with active (received) enquiries
+      var badge = document.getElementById("enquiryTabBadge");
+      if (badge) {
+        var openCount = (counts.received || 0) + (counts.discussion || 0);
+        if (openCount > 0) {
+          badge.innerText = openCount;
+          badge.style.display = "inline-block";
+        } else {
+          badge.style.display = "none";
+        }
+      }
+    }
+
+    // Render Enquiry Cards
+    function renderEnquiryCards(list) {
+      var container = document.getElementById("enquiryListContainer");
+      if (!container) return;
+
+      if (!list || list.length === 0) {
+        container.innerHTML = '<div class="text-center p-5 bg-white rounded-3 shadow-sm text-muted"><div style="font-size: 2.5em; margin-bottom: 8px;">📋</div><h6 class="fw-bold">No Sales Enquiries Found</h6><p class="small m-0">Click "+ Add Sales Enquiry" to log a new enquiry from a dealer!</p></div>';
+        return;
+      }
+
+      var html = "";
+      list.forEach(function(item) {
+        // Priority border
+        var pClass = "enq-priority-warm";
+        var pIcon = "⚡ Warm";
+        if (item.priority === "Hot") { pClass = "enq-priority-hot"; pIcon = "🔥 Hot"; }
+        else if (item.priority === "Cold") { pClass = "enq-priority-cold"; pIcon = "❄️ Cold"; }
+
+        // Stage badge & stepper calculation
+        var stageBadgeClass = "stage-badge-received";
+        var stageNum = 1;
+        if (item.stage === "Quotation / Discussion") { stageBadgeClass = "stage-badge-discussion"; stageNum = 2; }
+        else if (item.stage === "Follow-up Scheduled") { stageBadgeClass = "stage-badge-followup"; stageNum = 3; }
+        else if (item.stage === "Converted to Order") { stageBadgeClass = "stage-badge-converted"; stageNum = 4; }
+        else if (item.stage === "Enquiry Closed") { stageBadgeClass = "stage-badge-closed"; stageNum = 5; }
+
+        var step1 = stageNum >= 1 ? (stageNum > 1 ? "completed" : "active") : "";
+        var step2 = stageNum >= 2 ? (stageNum > 2 ? "completed" : "active") : "";
+        var step3 = stageNum >= 3 ? (stageNum > 3 ? "completed" : "active") : "";
+        var step4 = stageNum === 4 ? "completed" : (stageNum > 4 ? "" : "");
+        var step5 = stageNum === 5 ? "closed-step" : "";
+
+        var line1 = stageNum >= 2 ? "active" : "";
+        var line2 = stageNum >= 3 ? "active" : "";
+        var line3 = stageNum >= 4 ? "active" : "";
+        var line4 = stageNum === 5 ? "active" : "";
+
+        // Contextual highlights
+        var extraInfo = "";
+        if (item.stage === "Follow-up Scheduled" && item.followUpDate) {
+          extraInfo = '<div class="alert alert-warning py-1 px-2 small fw-bold mb-2">📅 Scheduled Follow-up: ' + item.followUpDate + '</div>';
+        } else if (item.stage === "Converted to Order") {
+          extraInfo = '<div class="alert alert-success py-1 px-2 small fw-bold mb-2">🎉 Converted to Order: ' + (item.linkedOrderId || "YM-Order") + ' | ₹' + (item.finalOrderAmt || item.estValue || 0).toLocaleString('en-IN') + '</div>';
+        } else if (item.stage === "Enquiry Closed" && item.closureReason) {
+          extraInfo = '<div class="alert alert-secondary py-1 px-2 small fw-bold mb-2">❌ Closed Reason: ' + item.closureReason + '</div>';
+        }
+
+        var phoneClean = (item.phone || "").toString().replace(/[^0-9]/g, '');
+        var waLink = phoneClean.length >= 10 ? ('https://wa.me/91' + phoneClean.slice(-10) + '?text=' + encodeURIComponent('Namaste ' + item.dealerName + ' ji, Yash Marketing se contact kar rahe hain aapki sales enquiry ke regarding.')) : '#';
+
+        html += '<div class="enquiry-card p-3 ' + pClass + '" id="card_enq_' + item.enquiryId + '">';
+        
+        // Header Row
+        html += '  <div class="d-flex justify-content-between align-items-center mb-2">';
+        html += '    <div>';
+        html += '      <span class="badge bg-dark fw-bold me-1">' + item.enquiryId + '</span>';
+        html += '      <span class="badge bg-light text-dark border fw-bold me-1">' + pIcon + '</span>';
+        html += '      <span class="badge ' + stageBadgeClass + '">' + item.stage + '</span>';
+        html += '    </div>';
+        html += '    <small class="text-muted fw-bold">' + (item.createdAt ? item.createdAt.split(',')[0] : '') + '</small>';
+        html += '  </div>';
+
+        // Dealer Info & Quick Contacts
+        html += '  <div class="d-flex justify-content-between align-items-start mb-2">';
+        html += '    <div>';
+        html += '      <h5 class="fw-bold text-dark m-0">' + item.dealerName + '</h5>';
+        html += '      <div class="small text-secondary fw-semibold">📍 ' + (item.area || 'General Area') + ' | 📞 ' + item.phone + '</div>';
+        html += '    </div>';
+        html += '    <div class="d-flex gap-2">';
+        html += '      <a href="tel:' + item.phone + '" class="dial-btn" title="Call Dealer">📞</a>';
+        if (waLink !== '#') {
+          html += '      <a href="' + waLink + '" target="_blank" class="dial-btn bg-success text-white" title="WhatsApp Dealer" style="background:#25D366 !important;">💬</a>';
+        }
+        html += '    </div>';
+        html += '  </div>';
+
+        // Products Requirement & Commercials
+        html += '  <div class="p-2 mb-2 rounded" style="background:#f8f9fa; border-left:3px solid #0d6efd;">';
+        html += '    <div class="small fw-bold text-primary mb-1">📦 PRODUCTS REQUIRED:</div>';
+        html += '    <div class="small text-dark fw-semibold" style="white-space:pre-wrap;">' + item.products + '</div>';
+        html += '  </div>';
+
+        html += '  <div class="row g-1 small fw-bold text-muted mb-2">';
+        html += '    <div class="col-6">Est. Value: <span class="text-dark">₹' + (item.estValue || 0).toLocaleString('en-IN') + '</span></div>';
+        html += '    <div class="col-6 text-end">Agent: <span class="text-primary">' + (item.assignedAgent || 'Unassigned') + '</span></div>';
+        html += '  </div>';
+
+        // Contextual Info
+        html += extraInfo;
+
+        // Visual Lifecycle Stepper
+        html += '  <div class="lifecycle-stepper">';
+        html += '    <span class="stepper-step ' + step1 + '">1. Received</span>';
+        html += '    <div class="stepper-line ' + line1 + '"></div>';
+        html += '    <span class="stepper-step ' + step2 + '">2. Discuss</span>';
+        html += '    <div class="stepper-line ' + line2 + '"></div>';
+        html += '    <span class="stepper-step ' + step3 + '">3. Follow-up</span>';
+        html += '    <div class="stepper-line ' + line3 + '"></div>';
+        html += '    <span class="stepper-step ' + step4 + '">4. Converted 🎉</span>';
+        html += '    <div class="stepper-line ' + line4 + '"></div>';
+        html += '    <span class="stepper-step ' + step5 + '">5. Closed</span>';
+        html += '  </div>';
+
+        // Action Button
+        html += '  <div class="d-flex justify-content-end mt-3 pt-2 border-top">';
+        html += '    <button class="btn btn-dark btn-sm fw-bold px-3 d-flex align-items-center gap-1" onclick="openUpdateStageModal('' + item.enquiryId + '')" style="border-radius:8px;">';
+        html += '      <span>⚡ Update Status / Move Stage</span>';
+        html += '    </button>';
+        html += '  </div>';
+
+        html += '</div>';
+      });
+
+      container.innerHTML = html;
+    }
+
+    // Filter by Stage
+    function filterEnquiriesByStage(stage, btnElement) {
+      currentEnquiryFilter = stage;
+      
+      // Update UI button states
+      document.querySelectorAll('.enq-filter-btn').forEach(function(b) {
+        b.classList.remove('active', 'btn-dark');
+        b.classList.add('btn-outline-dark');
+      });
+      if (btnElement) {
+        btnElement.classList.add('active', 'btn-dark');
+        btnElement.classList.remove('btn-outline-dark');
+      }
+
+      if (stage === "ALL") {
+        renderEnquiryCards(allEnquiriesData);
+      } else {
+        var filtered = allEnquiriesData.filter(function(item) {
+          return item.stage === stage;
+        });
+        renderEnquiryCards(filtered);
+      }
+    }
+
+    // Search Enquiries Real-time
+    function searchEnquiries(query) {
+      if (!query || !query.trim()) {
+        filterEnquiriesByStage(currentEnquiryFilter, null);
+        return;
+      }
+      var q = query.toLowerCase().trim();
+      var matches = allEnquiriesData.filter(function(item) {
+        return (item.dealerName && item.dealerName.toLowerCase().includes(q)) ||
+               (item.phone && item.phone.includes(q)) ||
+               (item.area && item.area.toLowerCase().includes(q)) ||
+               (item.products && item.products.toLowerCase().includes(q)) ||
+               (item.enquiryId && item.enquiryId.toLowerCase().includes(q));
+      });
+      renderEnquiryCards(matches);
+    }
+
+    // Open Add Sales Enquiry Modal
+    function openAddEnquiryModal() {
+      // Preload dealers datalist if not already cached
+      if (dealersListCache.length === 0) {
+        google.script.run
+          .withSuccessHandler(function(list) {
+            dealersListCache = list || [];
+            var dl = document.getElementById("dealersDatalist");
+            if (dl) {
+              dl.innerHTML = "";
+              dealersListCache.forEach(function(d) {
+                var opt = document.createElement("option");
+                opt.value = d.name;
+                opt.label = (d.area ? d.area + " - " : "") + d.phone;
+                dl.appendChild(opt);
+              });
+            }
+          })
+          .getDealersForEnquiryDatalist();
+      }
+
+      // Reset form
+      document.getElementById("addEnquiryForm").reset();
+      document.getElementById("newEnqPriority").value = "Warm";
+      
+      var modal = new bootstrap.Modal(document.getElementById("addEnquiryModal"));
+      modal.show();
+    }
+
+    // Handle Dealer Selection Auto-fill
+    function handleDealerSelect(dealerName) {
+      if (!dealerName || dealersListCache.length === 0) return;
+      var match = dealersListCache.find(function(d) {
+        return d.name.toLowerCase() === dealerName.toLowerCase();
+      });
+      if (match) {
+        if (match.phone && !document.getElementById("newEnqPhone").value) {
+          document.getElementById("newEnqPhone").value = match.phone;
+        }
+        if (match.area && !document.getElementById("newEnqArea").value) {
+          document.getElementById("newEnqArea").value = match.area;
+        }
+      }
+    }
+
+    // Submit New Sales Enquiry Form
+    function submitNewSalesEnquiry() {
+      var dName = document.getElementById("newEnqDealer").value.trim();
+      var phone = document.getElementById("newEnqPhone").value.trim();
+      var area = document.getElementById("newEnqArea").value.trim();
+      var products = document.getElementById("newEnqProducts").value.trim();
+      var estVal = document.getElementById("newEnqEstValue").value.trim();
+      var priority = document.getElementById("newEnqPriority").value;
+      var followUp = document.getElementById("newEnqFollowUp").value;
+      var notes = document.getElementById("newEnqNotes").value.trim();
+
+      if (!dName || !phone || !products) {
+        alert("Please fill Dealer Name, Phone, and Products Required.");
+        return;
+      }
+
+      var btn = document.getElementById("saveEnquiryBtn");
+      btn.disabled = true;
+      btn.innerText = "Saving Enquiry...";
+
+      var payload = {
+        dealerName: dName,
+        phone: phone,
+        area: area,
+        products: products,
+        estValue: estVal,
+        priority: priority,
+        followUpDate: followUp,
+        notes: notes,
+        agent: currentStaffName || "Agent"
+      };
+
+      google.script.run
+        .withSuccessHandler(function(res) {
+          btn.disabled = false;
+          btn.innerText = "💾 Save Sales Enquiry";
+          
+          if (res && res.success) {
+            bootstrap.Modal.getInstance(document.getElementById("addEnquiryModal")).hide();
+            alert("✅ " + res.msg);
+            loadSalesEnquiries();
+          } else {
+            alert("❌ " + (res ? res.msg : "Error saving enquiry"));
+          }
+        })
+        .withFailureHandler(function(err) {
+          btn.disabled = false;
+          btn.innerText = "💾 Save Sales Enquiry";
+          alert("Error: " + err.toString());
+        })
+        .addSalesEnquiry(payload);
+    }
+
+    // Open Update Stage Modal
+    function openUpdateStageModal(enquiryId) {
+      var item = allEnquiriesData.find(function(e) { return e.enquiryId === enquiryId; });
+      if (!item) return alert("Enquiry not found");
+
+      document.getElementById("updateEnqId").value = item.enquiryId;
+      document.getElementById("updateStageModalTitle").innerText = item.enquiryId + " - " + item.dealerName;
+      document.getElementById("updateStageModalSubtitle").innerText = "Current Stage: " + item.stage + " | Est: ₹" + (item.estValue || 0).toLocaleString('en-IN');
+      
+      document.getElementById("updateEnqStage").value = item.stage;
+      document.getElementById("updateOrderAmt").value = item.finalOrderAmt || item.estValue || "";
+      document.getElementById("updateOrderItems").value = item.products || "";
+      document.getElementById("updateFollowUpDate").value = item.followUpDate || "";
+      document.getElementById("updateEnqNotes").value = "";
+
+      onStageChange(item.stage);
+
+      var modal = new bootstrap.Modal(document.getElementById("updateStageModal"));
+      modal.show();
+    }
+
+    // Toggle contextual input blocks based on stage
+    function onStageChange(stage) {
+      var fUpBlock = document.getElementById("stageFollowUpBlock");
+      var convBlock = document.getElementById("stageConvertedBlock");
+      var closedBlock = document.getElementById("stageClosedBlock");
+
+      if (fUpBlock) fUpBlock.style.display = (stage === "Follow-up Scheduled") ? "block" : "none";
+      if (convBlock) convBlock.style.display = (stage === "Converted to Order") ? "block" : "none";
+      if (closedBlock) closedBlock.style.display = (stage === "Enquiry Closed") ? "block" : "none";
+    }
+
+    // Submit Stage Update
+    function submitStageUpdate() {
+      var enqId = document.getElementById("updateEnqId").value;
+      var stage = document.getElementById("updateEnqStage").value;
+      var notes = document.getElementById("updateEnqNotes").value.trim();
+      var followUp = document.getElementById("updateFollowUpDate").value;
+      var orderAmt = document.getElementById("updateOrderAmt").value;
+      var orderItems = document.getElementById("updateOrderItems").value;
+      var payMode = document.getElementById("updatePayMode").value;
+      var closeReason = document.getElementById("updateCloseReason").value;
+
+      var btn = document.getElementById("saveStageUpdateBtn");
+      btn.disabled = true;
+      btn.innerText = "Updating Stage...";
+
+      var payload = {
+        enquiryId: enqId,
+        stage: stage,
+        notes: notes,
+        followUpDate: followUp,
+        orderAmt: orderAmt,
+        orderItems: orderItems,
+        payMode: payMode,
+        closingReason: closeReason,
+        staffName: currentStaffName || "Agent"
+      };
+
+      google.script.run
+        .withSuccessHandler(function(res) {
+          btn.disabled = false;
+          btn.innerText = "⚡ Update Stage";
+
+          if (res && res.success) {
+            bootstrap.Modal.getInstance(document.getElementById("updateStageModal")).hide();
+            
+            // Confetti if converted to order!
+            if (stage === "Converted to Order" && typeof confetti !== 'undefined') {
+              confetti({ particleCount: 200, spread: 80, origin: { y: 0.6 } });
+            }
+
+            alert("✅ " + res.msg);
+            loadSalesEnquiries();
+          } else {
+            alert("❌ " + (res ? res.msg : "Error updating stage"));
+          }
+        })
+        .withFailureHandler(function(err) {
+          btn.disabled = false;
+          btn.innerText = "⚡ Update Stage";
+          alert("Error: " + err.toString());
+        })
+        .updateSalesEnquiryStage(payload);
+    }
+
+    // CEO Integration: Open Enquiries Pipeline from CEO Dashboard
+    function openCeoEnquiries() {
+      document.getElementById("ceoDashboard").style.display = "none";
+      document.getElementById("dashboardSection").style.display = "block";
+      document.getElementById("bottomNav").style.setProperty('display', 'flex', 'important');
+      switchModule('enquiryModule', document.querySelector('#moduleTabs a[onclick*="enquiryModule"]'));
+      loadSalesEnquiries();
+    }
+
+  </script>
   
   <!-- Confetti Library for Milestone Celebration -->
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
@@ -235,6 +638,86 @@
       padding: 12px; 
       text-align: center; 
     }
+  
+    /* ==========================================
+       SALES ENQUIRY PIPELINE STYLES
+       ========================================== */
+    .enquiry-card {
+      border-radius: 14px;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.06);
+      background: #ffffff;
+      transition: all 0.2s ease-in-out;
+      border: 1px solid #eef2f7;
+    }
+    .enquiry-card:hover {
+      box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+      transform: translateY(-2px);
+    }
+    .enq-priority-hot { border-left: 6px solid #dc3545 !important; }
+    .enq-priority-warm { border-left: 6px solid #fd7e14 !important; }
+    .enq-priority-cold { border-left: 6px solid #0dcaf0 !important; }
+
+    .stage-badge {
+      font-size: 0.78em;
+      font-weight: 700;
+      padding: 6px 12px;
+      border-radius: 30px;
+      display: inline-block;
+    }
+    .stage-badge-received { background-color: #e7f1ff; color: #0d6efd; border: 1px solid #b6d4fe; }
+    .stage-badge-discussion { background-color: #cff4fc; color: #055160; border: 1px solid #9eeaf9; }
+    .stage-badge-followup { background-color: #fff3cd; color: #664d03; border: 1px solid #ffe69c; }
+    .stage-badge-converted { background-color: #d1e7dd; color: #0f5132; border: 1px solid #a3cfbb; }
+    .stage-badge-closed { background-color: #e2e3e5; color: #41464b; border: 1px solid #c4c8cb; }
+
+    .lifecycle-stepper {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: relative;
+      margin: 12px 0 8px 0;
+      padding: 0 4px;
+    }
+    .stepper-step {
+      font-size: 0.72em;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 12px;
+      background: #e9ecef;
+      color: #6c757d;
+      white-space: nowrap;
+      z-index: 2;
+    }
+    .stepper-step.active {
+      background: #0d6efd;
+      color: #ffffff;
+    }
+    .stepper-step.completed {
+      background: #198754;
+      color: #ffffff;
+    }
+    .stepper-step.closed-step {
+      background: #6c757d;
+      color: #ffffff;
+    }
+    .stepper-line {
+      flex: 1;
+      height: 3px;
+      background: #dee2e6;
+      margin: 0 4px;
+      z-index: 1;
+    }
+    .stepper-line.active {
+      background: #198754;
+    }
+
+    .enq-filter-btn {
+      border-radius: 20px;
+      padding: 4px 14px;
+      font-size: 0.82em;
+    }
+
   </style>
 </head>
 <body>
@@ -269,6 +752,10 @@
       
       <div class="d-flex justify-content-between align-items-center mb-2">
         <h5 class="fw-bold m-0 text-dark">🦅 CEO Watchtower</h5>
+        <div>
+          <button class="btn btn-sm btn-primary fw-bold me-2" onclick="openCeoEnquiries()">💼 Sales Enquiries Pipeline</button>
+          <button class="btn btn-sm btn-outline-danger fw-bold" onclick="logout()">LOGOUT</button>
+        </div>
         <button class="btn btn-sm btn-outline-danger fw-bold" onclick="logout()">LOGOUT</button>
       </div>
 
@@ -487,6 +974,87 @@
         <div class="accordion" id="scriptsAccordion"></div>
         
       </div>
+
+      <!-- MODULE 4: Sales Enquiry Pipeline (Enquiry Received -> Enquiry Closed) -->
+      <div id="enquiryModule" class="module-section">
+        <!-- Header Bar -->
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <div>
+            <h5 class="fw-bold text-dark m-0">💼 Sales Enquiry Pipeline</h5>
+            <small class="text-secondary fw-semibold">Track dealer inquiries from receipt to closure</small>
+          </div>
+          <div class="d-flex gap-2">
+            <button class="btn btn-primary fw-bold shadow-sm d-flex align-items-center gap-1" onclick="openAddEnquiryModal()" style="border-radius: 10px;">
+              <span>➕</span> <span>Add Sales Enquiry</span>
+            </button>
+            <button class="btn btn-outline-secondary btn-sm" onclick="loadSalesEnquiries()" title="Refresh Enquiries" style="border-radius: 8px;">
+              🔄
+            </button>
+          </div>
+        </div>
+
+        <!-- KPI Metric Summary -->
+        <div class="row g-2 mb-3 text-center">
+          <div class="col-4 col-md-2">
+            <div class="card p-2 shadow-sm border-0 bg-white" onclick="filterEnquiriesByStage('ALL', null)" style="cursor:pointer; border-radius:10px;">
+              <small class="text-muted fw-bold d-block" style="font-size:0.7em;">TOTAL</small>
+              <h4 class="fw-bold m-0 text-dark" id="kpi_enq_total">0</h4>
+            </div>
+          </div>
+          <div class="col-4 col-md-2">
+            <div class="card p-2 shadow-sm border-0 bg-white" onclick="filterEnquiriesByStage('Enquiry Received', null)" style="cursor:pointer; border-radius:10px;">
+              <small class="text-primary fw-bold d-block" style="font-size:0.7em;">RECEIVED</small>
+              <h4 class="fw-bold m-0 text-primary" id="kpi_enq_received">0</h4>
+            </div>
+          </div>
+          <div class="col-4 col-md-2">
+            <div class="card p-2 shadow-sm border-0 bg-white" onclick="filterEnquiriesByStage('Quotation / Discussion', null)" style="cursor:pointer; border-radius:10px;">
+              <small class="text-info fw-bold d-block" style="font-size:0.7em;">DISCUSS</small>
+              <h4 class="fw-bold m-0 text-info" id="kpi_enq_discussion">0</h4>
+            </div>
+          </div>
+          <div class="col-4 col-md-2">
+            <div class="card p-2 shadow-sm border-0 bg-white" onclick="filterEnquiriesByStage('Follow-up Scheduled', null)" style="cursor:pointer; border-radius:10px;">
+              <small class="text-warning fw-bold d-block" style="font-size:0.7em;">FOLLOWUP</small>
+              <h4 class="fw-bold m-0 text-warning" id="kpi_enq_followup">0</h4>
+            </div>
+          </div>
+          <div class="col-4 col-md-2">
+            <div class="card p-2 shadow-sm border-0 bg-white" onclick="filterEnquiriesByStage('Converted to Order', null)" style="cursor:pointer; border-radius:10px;">
+              <small class="text-success fw-bold d-block" style="font-size:0.7em;">CONVERTED</small>
+              <h4 class="fw-bold m-0 text-success" id="kpi_enq_converted">0</h4>
+            </div>
+          </div>
+          <div class="col-4 col-md-2">
+            <div class="card p-2 shadow-sm border-0 bg-white" onclick="filterEnquiriesByStage('Enquiry Closed', null)" style="cursor:pointer; border-radius:10px;">
+              <small class="text-secondary fw-bold d-block" style="font-size:0.7em;">CLOSED</small>
+              <h4 class="fw-bold m-0 text-secondary" id="kpi_enq_closed">0</h4>
+            </div>
+          </div>
+        </div>
+
+        <!-- Filter & Search Bar -->
+        <div class="card p-3 mb-3 shadow-sm border-0" style="border-radius:12px;">
+          <input type="text" id="enquirySearchInput" class="form-control mb-2" placeholder="🔍 Search by dealer, phone, area, products, enquiry ID..." onkeyup="searchEnquiries(this.value)">
+          <div class="d-flex flex-wrap gap-1" id="enquiryStageFilters">
+            <button class="btn btn-sm btn-dark fw-bold enq-filter-btn active" onclick="filterEnquiriesByStage('ALL', this)">All</button>
+            <button class="btn btn-sm btn-outline-primary fw-bold enq-filter-btn" onclick="filterEnquiriesByStage('Enquiry Received', this)">📥 Received</button>
+            <button class="btn btn-sm btn-outline-info fw-bold enq-filter-btn" onclick="filterEnquiriesByStage('Quotation / Discussion', this)">💬 Discussion</button>
+            <button class="btn btn-sm btn-outline-warning fw-bold enq-filter-btn" onclick="filterEnquiriesByStage('Follow-up Scheduled', this)">📅 Follow-up</button>
+            <button class="btn btn-sm btn-outline-success fw-bold enq-filter-btn" onclick="filterEnquiriesByStage('Converted to Order', this)">🎉 Converted</button>
+            <button class="btn btn-sm btn-outline-secondary fw-bold enq-filter-btn" onclick="filterEnquiriesByStage('Enquiry Closed', this)">❌ Closed</button>
+          </div>
+        </div>
+
+        <!-- Enquiries Card List -->
+        <div id="enquiryListContainer">
+          <div class="text-center p-4 text-muted">
+            <div class="spinner-border text-primary spinner-border-sm" role="status"></div>
+            <span class="ms-2">Loading Sales Enquiries...</span>
+          </div>
+        </div>
+      </div>
+
       
     </div>
   </div>
@@ -501,6 +1069,9 @@
       </li>
       <li class="nav-item flex-fill">
         <a class="nav-link fw-bold" onclick="switchModule('followupModule', this)">📅 Follow-ups</a>
+      </li>
+      <li class="nav-item flex-fill">
+        <a class="nav-link fw-bold" onclick="switchModule('enquiryModule', this)">💼 Enquiries <span id="enquiryTabBadge" class="badge bg-danger rounded-pill" style="display:none; font-size:0.65em;">0</span></a>
       </li>
       <li class="nav-item flex-fill">
         <a class="nav-link fw-bold" onclick="switchModule('campaignModule', this)">🚀 Tools</a>
@@ -1146,6 +1717,9 @@
       });
       
       document.getElementById(moduleId).classList.add('active-module');
+      if (moduleId === 'enquiryModule' && allEnquiriesData.length === 0) {
+        loadSalesEnquiries();
+      }
       
       document.querySelectorAll('.nav-link').forEach(function(el) { 
         el.classList.remove('active'); 
@@ -1207,5 +1781,154 @@
     }
 
   </script>
+
+  <!-- ============================================== -->
+  <!-- MODAL: ADD SALES ENQUIRY                       -->
+  <!-- ============================================== -->
+  <div class="modal fade" id="addEnquiryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content shadow-lg border-0" style="border-radius: 16px;">
+        <div class="modal-header bg-primary text-white" style="border-top-left-radius: 16px; border-top-right-radius: 16px;">
+          <h5 class="modal-title fw-bold">➕ Add Sales Enquiry</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-3">
+          <form id="addEnquiryForm" onsubmit="event.preventDefault(); submitNewSalesEnquiry();">
+            <div class="mb-2">
+              <label class="form-label fw-bold small text-secondary">Dealer / Store Name *</label>
+              <input type="text" id="newEnqDealer" class="form-control" list="dealersDatalist" placeholder="Type or select dealer" required onchange="handleDealerSelect(this.value)">
+              <datalist id="dealersDatalist"></datalist>
+            </div>
+            <div class="row g-2 mb-2">
+              <div class="col-7">
+                <label class="form-label fw-bold small text-secondary">Phone Number *</label>
+                <input type="tel" id="newEnqPhone" class="form-control" placeholder="10-digit phone" required>
+              </div>
+              <div class="col-5">
+                <label class="form-label fw-bold small text-secondary">Area / City *</label>
+                <input type="text" id="newEnqArea" class="form-control" placeholder="e.g. Surat, Ring Rd" required>
+              </div>
+            </div>
+            <div class="mb-2">
+              <label class="form-label fw-bold small text-secondary">Products Required / Inquiry Details *</label>
+              <textarea id="newEnqProducts" class="form-control" rows="2" placeholder="e.g. Portronics 10k Powerbank (50 pcs), Boat Earbuds (20 pcs)" required></textarea>
+            </div>
+            <div class="row g-2 mb-2">
+              <div class="col-6">
+                <label class="form-label fw-bold small text-secondary">Est. Value (₹)</label>
+                <input type="number" id="newEnqEstValue" class="form-control" placeholder="e.g. 25000">
+              </div>
+              <div class="col-6">
+                <label class="form-label fw-bold small text-secondary">Priority</label>
+                <select id="newEnqPriority" class="form-select">
+                  <option value="Hot">🔥 Hot (Immediate)</option>
+                  <option value="Warm" selected>⚡ Warm (Normal)</option>
+                  <option value="Cold">❄️ Cold (Future)</option>
+                </select>
+              </div>
+            </div>
+            <div class="mb-2">
+              <label class="form-label fw-bold small text-secondary">Next Follow-up Date (Optional)</label>
+              <input type="date" id="newEnqFollowUp" class="form-control">
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-bold small text-secondary">Initial Discussion / Remarks</label>
+              <textarea id="newEnqNotes" class="form-control" rows="2" placeholder="Dealer requirements, requested payment terms, etc."></textarea>
+            </div>
+            <div class="d-flex gap-2">
+              <button type="button" class="btn btn-light flex-fill fw-bold" data-bs-dismiss="modal">Cancel</button>
+              <button type="submit" id="saveEnquiryBtn" class="btn btn-primary flex-fill fw-bold">💾 Save Sales Enquiry</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================== -->
+  <!-- MODAL: UPDATE ENQUIRY STAGE & LIFECYCLE        -->
+  <!-- ============================================== -->
+  <div class="modal fade" id="updateStageModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content shadow-lg border-0" style="border-radius: 16px;">
+        <div class="modal-header bg-dark text-white" style="border-top-left-radius: 16px; border-top-right-radius: 16px;">
+          <div>
+            <h5 class="modal-title fw-bold m-0" id="updateStageModalTitle">Update Enquiry Stage</h5>
+            <small class="text-white-50" id="updateStageModalSubtitle"></small>
+          </div>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-3">
+          <input type="hidden" id="updateEnqId">
+          
+          <div class="mb-3">
+            <label class="form-label fw-bold small text-secondary">Select Pipeline Stage *</label>
+            <select id="updateEnqStage" class="form-select form-select-lg fw-bold" onchange="onStageChange(this.value)">
+              <option value="Enquiry Received">📥 1. Enquiry Received</option>
+              <option value="Quotation / Discussion">💬 2. Quotation / Discussion</option>
+              <option value="Follow-up Scheduled">📅 3. Follow-up Scheduled</option>
+              <option value="Converted to Order">🎉 4. Converted to Order</option>
+              <option value="Enquiry Closed">❌ 5. Enquiry Closed</option>
+            </select>
+          </div>
+
+          <!-- Contextual Block: Follow-up -->
+          <div id="stageFollowUpBlock" class="mb-3 p-2 bg-light rounded" style="display:none;">
+            <label class="form-label fw-bold small text-warning">📅 Next Follow-up Date *</label>
+            <input type="date" id="updateFollowUpDate" class="form-control">
+          </div>
+
+          <!-- Contextual Block: Converted to Order -->
+          <div id="stageConvertedBlock" class="mb-3 p-3 bg-light rounded border border-success" style="display:none;">
+            <div class="small fw-bold text-success mb-2">🎉 CONVERT TO ORDER (Auto-syncs with Order Book)</div>
+            <div class="row g-2 mb-2">
+              <div class="col-6">
+                <label class="form-label fw-bold small text-secondary">Final Order Amount (₹) *</label>
+                <input type="number" id="updateOrderAmt" class="form-control" placeholder="e.g. 45000">
+              </div>
+              <div class="col-6">
+                <label class="form-label fw-bold small text-secondary">Payment Mode *</label>
+                <select id="updatePayMode" class="form-select">
+                  <option value="Cash">Cash</option>
+                  <option value="UPI / Online">UPI / Online</option>
+                  <option value="Cheque">Cheque</option>
+                  <option value="Credit / Bill" selected>Credit / Bill</option>
+                </select>
+              </div>
+            </div>
+            <div class="mb-1">
+              <label class="form-label fw-bold small text-secondary">Ordered Items & Quantity</label>
+              <textarea id="updateOrderItems" class="form-control" rows="2" placeholder="List of final ordered products"></textarea>
+            </div>
+          </div>
+
+          <!-- Contextual Block: Enquiry Closed -->
+          <div id="stageClosedBlock" class="mb-3 p-2 bg-light rounded border border-secondary" style="display:none;">
+            <label class="form-label fw-bold small text-danger">Closure / Lost Reason</label>
+            <select id="updateCloseReason" class="form-select mb-2">
+              <option value="Price too high">Price too high</option>
+              <option value="Out of stock">Product out of stock</option>
+              <option value="Bought from competitor">Bought from competitor</option>
+              <option value="Dealer cancelled">Dealer cancelled requirement</option>
+              <option value="Requirement completed">Requirement completed & fulfilled</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <!-- General Notes / Remarks -->
+          <div class="mb-3">
+            <label class="form-label fw-bold small text-secondary">Notes / Remarks for this Stage Update</label>
+            <textarea id="updateEnqNotes" class="form-control" rows="2" placeholder="Add details of the call, quote discussion, or reason..."></textarea>
+          </div>
+
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-light flex-fill fw-bold" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" id="saveStageUpdateBtn" class="btn btn-dark flex-fill fw-bold" onclick="submitStageUpdate()">⚡ Update Stage</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>
