@@ -540,9 +540,10 @@
     
     .nav-pills .nav-link { 
       border-radius: 0; 
-      padding: 12px 0; 
+      padding: 10px 2px; 
       color: #495057; 
-      font-size: 0.85em; 
+      font-size: 0.78em; 
+      white-space: nowrap;
     }
     
     .nav-pills .nav-link.active { 
@@ -838,8 +839,9 @@
       <!-- Header Row -->
       <div class="d-flex justify-content-between align-items-center mb-2">
         <h6 class="fw-bold m-0 text-secondary" id="welcomeMsg"></h6>
-        <div>
-          <span id="offlineBadge" class="badge bg-warning text-dark me-2" style="display:none;">Offline Mode</span>
+        <div class="d-flex align-items-center gap-2">
+          <button class="btn btn-sm btn-primary fw-bold shadow-sm" onclick="openAddEnquiryModal()" style="border-radius:8px;">➕ Enquiry</button>
+          <span id="offlineBadge" class="badge bg-warning text-dark" style="display:none;">Offline</span>
           <button class="btn btn-sm btn-outline-danger fw-bold" onclick="logout()">LOGOUT</button>
         </div>
       </div>
@@ -861,6 +863,14 @@
              <span class="brand-badge">KELOCK: ₹1/pc</span>
              <span class="brand-badge">BOAT: ₹2/pc</span>
            </div>
+        </div>
+
+        <!-- QUICK ACTION: ADD SALES ENQUIRY -->
+        <div class="mb-3">
+          <button class="btn btn-primary w-100 py-2 fw-bold shadow-sm d-flex justify-content-center align-items-center gap-2 text-white" onclick="openAddEnquiryModal()" style="border-radius: 10px; background: linear-gradient(135deg, #0d6efd, #0b5ed7); font-size: 0.95em; border: none;">
+            <span style="font-size:1.2em;">➕</span>
+            <span>Add Sales Enquiry (नयी इंक्वायरी दर्ज करें)</span>
+          </button>
         </div>
         
         <!-- Other Active Schemes -->
