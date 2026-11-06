@@ -674,3 +674,300 @@ function summarizeWithAI(textNotes) {
 function sendEODReport() {
   Logger.log("EOD Report generation triggered.");
 }
+
+// ==============================================================================
+// SALES ENQUIRY ENGINE (PIPELINE: ENQUIRY RECEIVED -> ENQUIRY CLOSED)
+// ==============================================================================
+
+/**
+ * HELPER: GET OR CREATE "Sales Enquiries" SHEET
+ */
+function getSalesEnquirySheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName("Sales Enquiries");
+  if (!sheet) {
+    sheet = ss.insertSheet("Sales Enquiries");
+    sheet.appendRow([
+      "Enquiry ID",          // Col 1: A
+      "Created At",          // Col 2: B
+      "Dealer Name",         // Col 3: C
+      "Phone",               // Col 4: D
+      "Area",                // Col 5: E
+      "Products Required",   // Col 6: F
+      "Estimated Value",     // Col 7: G
+      "Priority",            // Col 8: H (Hot, Warm, Cold)
+      "Current Stage",       // Col 9: I (Enquiry Received, Quotation / Discussion, Follow-up Scheduled, Converted to Order, Enquiry Closed)
+      "Assigned Agent",      // Col 10: J
+      "Next Follow-up Date", // Col 11: K
+      "Final Order Amount",  // Col 12: L
+      "Linked Order ID",     // Col 13: M
+      "Closure Reason",      // Col 14: N
+      "Activity Notes",      // Col 15: O
+      "Last Updated At"      // Col 16: P
+    ]);
+    sheet.getRange(1, 1, 1, 16).setFontWeight("bold").setBackground("#e8f0fe");
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+/**
+ * ADD SALES ENQUIRY
+ * Records a new dealer sales enquiry into "Sales Enquiries" sheet.
+ */
+function addSalesEnquiry(data) {
+  try {
+    const sheet = getSalesEnquirySheet_();
+    const timestamp = new Date();
+    const autoEnqId = "ENQ-" + Math.floor(10000 + Math.random() * 90000);
+    
+    const dealerName = (data.dealerName || "").toString().trim();
+    const phone = (data.phone || "").toString().trim();
+    const area = (data.area || "").toString().trim();
+    const products = (data.products || "").toString().trim();
+    const estValue = parseFloat(data.estValue) || 0;
+    const priority = data.priority || "Warm";
+    const stage = "Enquiry Received"; // Initial stage
+    const agent = (data.agent || "").toString().trim();
+    const followUpDate = data.followUpDate || "";
+    const notes = (data.notes || "").toString().trim();
+    
+    const initialNoteHistory = `[${timestamp.toLocaleString('en-IN')}] Enquiry created by ${agent}: ${notes || 'Initial enquiry logged'}`;
+    
+    sheet.appendRow([
+      autoEnqId,
+      timestamp,
+      dealerName,
+      phone,
+      area,
+      products,
+      estValue,
+      priority,
+      stage,
+      agent,
+      followUpDate,
+      0,                  // Final Order Amount
+      "",                 // Linked Order ID
+      "",                 // Closure Reason
+      initialNoteHistory, // Activity Notes
+      timestamp           // Last Updated At
+    ]);
+    
+    return {
+      success: true,
+      enquiryId: autoEnqId,
+      msg: `Sales Enquiry ${autoEnqId} successfully created for ${dealerName}!`
+    };
+  } catch (err) {
+    Logger.log("addSalesEnquiry Error: " + err.toString());
+    return { success: false, msg: "Error adding enquiry: " + err.toString() };
+  }
+}
+
+/**
+ * GET SALES ENQUIRIES
+ * Returns all active & historic sales enquiries with stage counts.
+ */
+function getSalesEnquiries(staffName, role) {
+  try {
+    const sheet = getSalesEnquirySheet_();
+    const data = sheet.getDataRange().getValues();
+    
+    let list = [];
+    let counts = {
+      total: 0,
+      received: 0,
+      discussion: 0,
+      followup: 0,
+      converted: 0,
+      closed: 0
+    };
+    
+    for (let i = 1; i < data.length; i++) {
+      let row = data[i];
+      let enqId = row[0];
+      if (!enqId) continue;
+      
+      let createdDate = row[1] ? new Date(row[1]).toLocaleString('en-IN') : "";
+      let dName = row[2] || "";
+      let phone = row[3] || "";
+      let area = row[4] || "";
+      let products = row[5] || "";
+      let estValue = parseFloat(row[6]) || 0;
+      let priority = row[7] || "Warm";
+      let stage = row[8] || "Enquiry Received";
+      let assignedAgent = row[9] || "";
+      let followUpDate = row[10] ? (row[10] instanceof Date ? row[10].toLocaleDateString('en-IN') : String(row[10])) : "";
+      let finalAmt = parseFloat(row[11]) || 0;
+      let orderId = row[12] || "";
+      let closeReason = row[13] || "";
+      let notes = row[14] || "";
+      let lastUpdated = row[15] ? new Date(row[15]).toLocaleString('en-IN') : "";
+      
+      counts.total++;
+      if (stage === "Enquiry Received") counts.received++;
+      else if (stage === "Quotation / Discussion") counts.discussion++;
+      else if (stage === "Follow-up Scheduled") counts.followup++;
+      else if (stage === "Converted to Order") counts.converted++;
+      else if (stage === "Enquiry Closed") counts.closed++;
+      
+      list.unshift({
+        rowNumber: i + 1,
+        enquiryId: enqId,
+        createdAt: createdDate,
+        dealerName: dName,
+        phone: phone,
+        area: area,
+        products: products,
+        estValue: estValue,
+        priority: priority,
+        stage: stage,
+        assignedAgent: assignedAgent,
+        followUpDate: followUpDate,
+        finalOrderAmt: finalAmt,
+        linkedOrderId: orderId,
+        closureReason: closeReason,
+        notes: notes,
+        lastUpdated: lastUpdated
+      });
+    }
+    
+    return {
+      success: true,
+      enquiries: list,
+      counts: counts
+    };
+  } catch (err) {
+    Logger.log("getSalesEnquiries Error: " + err.toString());
+    return { success: false, enquiries: [], counts: {}, error: err.toString() };
+  }
+}
+
+/**
+ * UPDATE SALES ENQUIRY STAGE
+ * Moves enquiry through lifecycle stages:
+ * Enquiry Received -> Quotation / Discussion -> Follow-up Scheduled -> Converted to Order -> Enquiry Closed
+ */
+function updateSalesEnquiryStage(payload) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = getSalesEnquirySheet_();
+    const data = sheet.getDataRange().getValues();
+    const timestamp = new Date();
+    
+    let targetRow = -1;
+    let currentEnq = null;
+    
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] && data[i][0].toString().trim() === payload.enquiryId.toString().trim()) {
+        targetRow = i + 1;
+        currentEnq = data[i];
+        break;
+      }
+    }
+    
+    if (targetRow === -1) {
+      return { success: false, msg: "Enquiry ID not found: " + payload.enquiryId };
+    }
+    
+    const newStage = payload.stage;
+    const notesUpdate = payload.notes || "";
+    const staffName = payload.staffName || "Staff";
+    let linkedOrderId = currentEnq[12] || "";
+    let finalOrderAmt = parseFloat(payload.orderAmt) || parseFloat(currentEnq[11]) || 0;
+    let followUpDate = payload.followUpDate !== undefined ? payload.followUpDate : (currentEnq[10] || "");
+    let closeReason = payload.closingReason !== undefined ? payload.closingReason : (currentEnq[13] || "");
+    
+    // Update Stage (Col I: 9)
+    sheet.getRange(targetRow, 9).setValue(newStage);
+    
+    // Update Follow-up Date (Col K: 11)
+    if (followUpDate) {
+      sheet.getRange(targetRow, 11).setValue(followUpDate);
+    }
+    
+    // If Converted to Order, push directly to "Order Book"
+    if (newStage === "Converted to Order" && finalOrderAmt > 0) {
+      if (!linkedOrderId) {
+        linkedOrderId = "YM-" + Math.floor(10000 + Math.random() * 90000);
+      }
+      
+      let orderSheet = ss.getSheetByName("Order Book");
+      if (!orderSheet) {
+        orderSheet = ss.insertSheet("Order Book");
+        orderSheet.appendRow(["Date & Time", "OrderID", "ShopName", "DealerPhone", "OrderItems", "TotalAmount", "Payment Mode", "Additional Discount"]);
+      }
+      
+      const orderItems = payload.orderItems || currentEnq[5] || "Enquiry Converted Order";
+      const payMode = payload.payMode || "Credit / Bill";
+      
+      orderSheet.appendRow([
+        timestamp,
+        linkedOrderId,
+        currentEnq[2], // Dealer Name
+        currentEnq[3], // Phone
+        orderItems,
+        finalOrderAmt,
+        payMode,
+        "Enquiry: " + payload.enquiryId
+      ]);
+      
+      sheet.getRange(targetRow, 12).setValue(finalOrderAmt); // Col L: Final Order Amount
+      sheet.getRange(targetRow, 13).setValue(linkedOrderId);  // Col M: Linked Order ID
+    }
+    
+    // If Enquiry Closed, store reason
+    if (newStage === "Enquiry Closed" && closeReason) {
+      sheet.getRange(targetRow, 14).setValue(closeReason); // Col N: Closure Reason
+    }
+    
+    // Append to Activity Notes (Col O: 15)
+    let prevNotes = currentEnq[14] || "";
+    let newEntry = `[${timestamp.toLocaleString('en-IN')}] Stage changed to "${newStage}" by ${staffName}${notesUpdate ? ': ' + notesUpdate : ''}${linkedOrderId ? ' (Order: ' + linkedOrderId + ')' : ''}`;
+    let combinedNotes = prevNotes ? (prevNotes + "\n" + newEntry) : newEntry;
+    sheet.getRange(targetRow, 15).setValue(combinedNotes);
+    
+    // Last Updated At (Col P: 16)
+    sheet.getRange(targetRow, 16).setValue(timestamp);
+    
+    return {
+      success: true,
+      msg: `Enquiry ${payload.enquiryId} updated to "${newStage}" successfully!`,
+      orderId: linkedOrderId
+    };
+  } catch (err) {
+    Logger.log("updateSalesEnquiryStage Error: " + err.toString());
+    return { success: false, msg: "Error updating enquiry: " + err.toString() };
+  }
+}
+
+/**
+ * GET DEALERS FOR ENQUIRY DATALIST
+ * Returns list of known dealers from Dealer Database for smart autocomplete.
+ */
+function getDealersForEnquiryDatalist() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const dbSheet = ss.getSheetByName("Dealer Database");
+    if (!dbSheet) return [];
+    
+    const data = dbSheet.getDataRange().getValues();
+    let dealers = [];
+    let seen = {};
+    
+    for (let i = 1; i < data.length; i++) {
+      let phone = data[i][0] ? data[i][0].toString().trim() : "";
+      let name = data[i][1] ? data[i][1].toString().trim() : "";
+      let area = data[i][2] ? data[i][2].toString().trim() : "";
+      
+      if (name && !seen[name.toLowerCase()]) {
+        seen[name.toLowerCase()] = true;
+        dealers.push({ name: name, phone: phone, area: area });
+      }
+    }
+    return dealers;
+  } catch (err) {
+    Logger.log("getDealersForEnquiryDatalist Error: " + err.toString());
+    return [];
+  }
+}
